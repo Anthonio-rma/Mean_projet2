@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Lite Pro</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <header class="sidebar-header">
+                <div class="user-profile">
+                    <div class="avatar-wrapper">
+                        <img src="https://i.pravatar.cc/150?u=me" alt="Mon Profil">
+                        <span class="status-dot online"></span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn"><i data-lucide="circle-dashed"></i></button>
+                    <button class="icon-btn"><i data-lucide="message-square-plus"></i></button>
+                    <button class="icon-btn"><i data-lucide="more-vertical"></i></button>
+                </div>
+            </header>
+
+            <div class="search-container">
+                <div class="search-bar">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" id="contactSearch" placeholder="Rechercher ou démarrer une discussion">
+                </div>
+            </div>
+
+            <nav class="chat-list custom-scrollbar">
+                <div class="contact-item active">
+                    <img src="https://i.pravatar.cc/150?u=alice" alt="Alice">
+                    <div class="contact-info">
+                        <div class="contact-header">
+                            <span class="name">Alice Smith</span>
+                            <span class="time">14:20</span>
+                        </div>
+                        <div class="contact-msg">
+                            <p>On se voit à 18h ? ☕</p>
+                            <span class="badge">2</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <img src="https://i.pravatar.cc/150?u=bob" alt="Design Team">
+                    <div class="contact-info">
+                        <div class="contact-header">
+                            <span class="name">Design Team</span>
+                            <span class="time">Hier</span>
+                        </div>
+                        <div class="contact-msg">
+                            <p><i data-lucide="camera" class="inline-icon"></i> Photo</p>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="current-contact">
+                    <img src="https://i.pravatar.cc/150?u=alice" class="avatar-sm">
+                    <div class="contact-details">
+                        <h3>Alice Smith</h3>
+                        <span class="status-text">En ligne</span>
+                    </div>
+                </div>
+                <div class="chat-tools">
+                    <button class="icon-btn"><i data-lucide="video"></i></button>
+                    <button class="icon-btn"><i data-lucide="phone"></i></button>
+                    <div class="v-divider"></div>
+                    <button class="icon-btn"><i data-lucide="search"></i></button>
+                </div>
+            </header>
+
+            <section class="messages-viewport custom-scrollbar" id="chatDisplay">
+                <div class="date-chip">Aujourd'hui</div>
+                
+                <div class="message-row incoming">
+                    <div class="message-bubble">
+                        Salut ! Tu as pu regarder le dossier ?
+                        <div class="message-meta">14:15</div>
+                    </div>
+                </div>
+
+                <div class="message-row outgoing">
+                    <div class="message-bubble">
+                        Oui, c'est presque fini ! Je t'envoie ça dans 5 min. 🚀
+                        <div class="message-meta">
+                            14:18 <i data-lucide="check-check" class="status-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <footer class="input-container">
+                <button class="tool-btn"><i data-lucide="plus"></i></button>
+                <div class="input-pill">
+                    <button class="tool-btn"><i data-lucide="smile"></i></button>
+                    <input type="text" id="messageInput" placeholder="Tapez un message...">
+                </div>
+                <button class="send-btn" id="sendBtn">
+                    <i data-lucide="mic" id="actionIcon"></i>
+                </button>
+            </footer>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
