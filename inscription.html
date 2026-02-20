@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="mg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscription - WhatsApp Web</title>
+    <link rel="stylesheet" href="/wwwroot/styles/login.css">
+    <style>
+        h2 { text-align: center; margin-bottom: 30px; color: var(--wa-teal); }
+        .avatar-box { text-align: center; margin-bottom: 20px; }
+        .avatar-preview {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: #e9edef;
+            margin: 0 auto 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .avatar-preview img { width: 100%; border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div class="green-banner"></div>
+
+    <div class="main-container">
+        <div class="auth-card">
+            <div class="info-side">
+                <div class="logo-area">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WA">
+                    <span>WHATSAPP WEB</span>
+                </div>
+                <div class="instructions">
+                    <h1>Inscrivez-vous sur WhatsApp Web</h1>
+                    <p>Créez un compte pour discuter avec vos amis et votre famille.</p>
+                </div>
+                <div class="qr-container">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=InscriptionWA" alt="QR Code">
+                </div>
+            </div>
+
+            <div class="form-side">
+                <div class="step active">
+                    <h2>Créer un compte</h2>
+
+                    <div class="avatar-box">
+                        <div class="avatar-preview">
+                            <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" alt="Avatar">
+                        </div>
+                        <input type="file" id="avatar" style="display:none;" onchange="previewAvatar(event)">
+                        <button class="btn-next" onclick="document.getElementById('avatar').click()">Choisir une photo</button>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Nom complet</label>
+                        <input type="text" placeholder="Entrez votre nom" id="fullname">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Numéro de téléphone</label>
+                        <input type="tel" placeholder="034 00 000 00" id="phone">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Mot de passe</label>
+                        <input type="password" placeholder="Entrez votre mot de passe" id="password">
+                    </div>
+
+                    <button class="btn-next" onclick="register()">S'INSCRIRE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function previewAvatar(event) {
+            const avatarImg = document.querySelector('.avatar-preview img');
+            avatarImg.src = URL.createObjectURL(event.target.files[0]);
+        }
+
+        function register() {
+            const name = document.getElementById('fullname').value;
+            const phone = document.getElementById('phone').value;
+            const password = document.getElementById('password').value;
+
+            if (!name || !phone || !password) {
+                alert('Veuillez remplir tous les champs.');
+                return;
+            }
+
+            alert(`Inscription réussie !\nNom: ${name}\nTéléphone: ${phone}`);
+        }
+    </script>
+</body>
+</html>
