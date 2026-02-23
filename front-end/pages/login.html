@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web - Madagascar</title>
+    <link rel="stylesheet" href="../wwwroot/styles/login.css">
+</head>
+<body>
+    <div class="green-banner"></div>
+
+    <div class="main-container">
+        <div class="auth-card">
+            <div class="info-side">
+                <div class="logo-area">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WA">
+                    <span>WHATSAPP WEB</span>
+                </div>
+
+                <div class="instructions">
+                    <h1>Utiliser WhatsApp sur votre ordinateur</h1>
+                    <ol>
+                        <li>Ouvrez WhatsApp sur votre téléphone</li>
+                        <li>Appuyez sur <strong>Menu</strong> ou <strong>Réglages</strong> et sélectionnez <strong>Appareils connectés</strong></li>
+                        <li>Pointez votre téléphone vers cet écran pour capturer le code</li>
+                    </ol>
+                    <a href="../index.html">Inscription</a>
+                </div>
+
+                <div class="qr-container">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WhatsAppMada" alt="QR Code">
+                    <div class="qr-refresh"></div>
+                </div>
+            </div>
+
+            <div class="form-side">
+                <!-- FORMULAIRE -->
+                <form id="loginForm">
+                    <div id="login-step" class="step active">
+                        <h2>Connexion par numéro</h2>
+                        <div class="input-group">
+                            <label>VOTRE PAYS</label>
+                            <input type="text" id="pays" name="pays" value="Madagascar">
+                        </div>
+
+                        <div class="phone-row">
+                            <div class="input-group code">
+                                <label>CODE</label>
+                                <input type="text" name="code" value="+261" readonly>
+                            </div>
+                            <div class="input-group number">
+                                <label>NUMÉRO DE TÉLÉPHONE</label>
+                                <input type="tel" name="phone" id="tel" placeholder="034 00 000 00" required>
+                            </div>
+                        </div>
+                        <button class="btn-next" type="button" onclick="nextStep()">CONTINUER</button>
+                    </div>
+
+                    <div id="profile-step" class="step">
+                        <h2>Finalisez votre profil</h2>
+
+                        <div class="input-group">
+                            <label>VOTRE NOM</label>
+                            <input type="text" name="fullname" placeholder="Entrez votre nom" autocomplete="off" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Mot de passe</label>
+                            <input type="password" name="password" autocomplete="new-password" placeholder="Entrez votre mot de passe" required>
+                        </div>
+
+                        <button type="submit" class="btn-next">COMMENCER</button>
+                        <p class="back-link" onclick="prevStep()">Retour</p>
+                    </div>
+                </form>
+                <!-- FIN FORMULAIRE -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const login = document.getElementById('loginForm')
+        // Gestion étapes
+        function nextStep() {
+            document.getElementById("login-step").classList.remove("active");
+            document.getElementById("profile-step").classList.add("active");
+        }
+        function prevStep() {
+            document.getElementById("profile-step").classList.remove("active");
+            document.getElementById("login-step").classList.add("active");
+        }
+
+    login.addEventListener("submit", async (e) => {
+        e.preventDefault()
+
+        const formData = new FormData(login);
+        const data = Object.fromEntries(formData.entries()); // transforme en JSON
+
+        try {
+            const res = await fetch("http://localhost:3000/api/users/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+                credentials: "include" // 🔥 indispensable pour que connect.sid soit envoyé
+            })
+
+            const result = await res.json();
+            if(result.error){
+                alert(result.error);
+            } else {
+                window.location.href = result.redirect; // /pages/message.html
+            }
+        } catch(err){
+            console.error(err);
+            alert("Erreur serveur");
+        }
+    })
+</script>
+</body>
+</html>

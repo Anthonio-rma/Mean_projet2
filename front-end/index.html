@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscription - WhatsApp Web</title>
+    <link rel="stylesheet" href="wwwroot/styles/login.css">
+    <style>
+        h2 { text-align: center; margin-bottom: 30px; color: var(--wa-teal); }
+        .avatar-box { text-align: center; margin-bottom: 20px; }
+        .avatar-preview {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: #e9edef;
+            margin: 0 auto 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .avatar-preview img { width: 100%; border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div class="green-banner"></div>
+
+    <div class="main-container">
+        <div class="auth-card">
+            <div class="info-side">
+                <div class="logo-area">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WA">
+                    <span>WHATSAPP WEB</span>
+                </div>
+                <div class="instructions">
+                    <h1>Inscrivez-vous sur WhatsApp Web</h1>
+                    <p>Créez un compte pour discuter avec vos amis et votre famille.</p>
+                    <a href="pages/login.html">se connecter </a>
+                </div>
+            </div>
+
+            <div class="form-side">
+                <div class="step active">
+                    <h2>Créer un compte</h2>
+
+                    <form id="registerForm" enctype="multipart/form-data" autocomplete="off">
+                        <div class="input-group">
+                            <label>Nom complet</label>
+                            <input type="text" placeholder="Entrez votre nom" name="fullname" id="fullname" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Pays</label>
+                            <input type="text" placeholder="Entrez votre pays" name="paysname" id="paysname" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Numéro de téléphone</label>
+                            <input type="tel" placeholder="034 00 000 00" name="phone" id="phone" required autocomplete="off">
+                        </div>
+
+                        <div class="input-group">
+                            <label>Mot de passe</label>
+                            <input type="password" placeholder="Entrez votre mot de passe" name="password" id="password" required autocomplete="new-password">
+                        </div>
+
+                        <input type="file" id="avatar" name="file">
+                        <button class="btn-next" type="submit">S'INSCRIRE</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
