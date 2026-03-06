@@ -115,7 +115,15 @@ body {
     font-size: 10px; color: var(--text-sec); text-align: right;
     margin-top: 4px; display: flex; align-items: center; justify-content: flex-end; gap: 3px;
 }
-.status-icon { width: 14px; color: var(--check-blue); }
+
+.status-icon{
+  width: 14px;
+  height: 14px;
+  color: var(--check-blue);
+  flex: 0 0 auto;         
+  vertical-align: middle; 
+  margin-left: 4px;
+}
 
 .date-chip {
     align-self: center; background: white; padding: 5px 12px;
@@ -209,4 +217,99 @@ body {
     background-color: #d1d7db;
     margin: 0 10px;
 }
+
+/* ===== PROFIL MODAL ===== */
+.hidden { display: none !important; }
+
+.profile-modal{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.profile-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+}
+
+.profile-card{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  padding: 18px;
+}
+
+.profile-close{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.profile-top{
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-right: 26px;
+}
+
+.profile-avatar{
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-main h2{
+  font-size: 18px;
+  margin: 0;
+}
+
+.profile-sub{
+  margin-top: 4px;
+  color: #667781;
+  font-size: 14px;
+}
+
+.profile-section{
+  margin-top: 16px;
+  border-top: 1px solid #eee;
+  padding-top: 12px;
+}
+
+.profile-section h4{
+  font-size: 14px;
+  margin: 0 0 10px 0;
+  color: #111b21;
+}
+
+.profile-row{
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.profile-label{
+  color: #667781;
+  font-size: 13px;
+}
+
+.profile-value{
+  color: #111b21;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+
 

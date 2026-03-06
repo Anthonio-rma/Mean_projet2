@@ -64,62 +64,117 @@ router.post("/register", upload.single("file"), async (req, res) => {
     }
 })
 
-router.post("/login", async (req,res) => {
-    const { code, phone, password, fullname} = req.body;
+//LOGIN
 
-    //verif pays
-    if(code != "+261"){
-        return res.status(400).json({
-            error: "Pays non autorisé"
-        })
-    }
+router.post("/login", async (req, res) => {
+  try {
+    const { code, phone, password } = req.body;
 
-    //verifi user
-    const user = await User.findOne({ phone })
-    if(!user){
-        return res.status(400).json({
-            error: 'numero inconnue'
-        })
-    }
+    if (code != "+261") return res.status(400).json({ error: "Pays non autorisé" });
 
-    //verif name
-    if(fullname !== user.fullname){
-        return res.status(400).json({
-            error: "nom incorrect"
-        });
-    }
+    const user = await User.findOne({ phone });
+    if (!user) return res.status(400).json({ error: "numero inconnue" });
 
-    //verif password
     const match = await bcrypt.compare(password, user.password);
-    if(!match){
-        return res.status(400).json({
-            error: "Mot de passe incorrect"
-        });
-    }
+    if (!match) return res.status(400).json({ error: "Mot de passe incorrect" });
 
-    // 🔥 forcer création d’une nouvelle session
-    req.session.regenerate(err => {
-        if(err) return res.status(500).json({ error: "Impossible de créer la session" });
+    if (!req.session) return res.status(500).json({ error: "Session non initialisée" });
 
-        req.session.userId = user._id;
-        res.json({ redirect: "/pages/message.html" });
+    req.session.regenerate(async (err) => {
+      if (err) return res.status(500).json({ error: "Impossible de créer la session" });
+
+      req.session.userId = user._id;
+
+      await User.updateOne({ _id: user._id }, { $set: { connect: true } });
+
+      res.json({ redirect: "/pages/message.html" });
     });
-})
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 
 // route pour récupérer l'utilisateur connecté
 router.get("/me", isAuth, async (req, res) => {
-    try {
-        const user = await User.findById(req.session.userId).select("-password -paysname");
-        // on retire le mot de passe et info sensible
-        if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+  try {
+    const user = await User.findById(req.session.userId).select("-password -paysname");
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
 
-        // construire le chemin complet pour l'image
-        const imageUrl = user.file ? `/upload/${user.file}` : null;
-        res.json({ fullname: user.fullname, phone: user.phone, image: imageUrl });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erreur serveur" });
+    const imageUrl = user.file ? `/upload/${user.file}` : null;
+
+    //IMPORTANT: renvoyer l'id
+    res.json({ _id: user._id, fullname: user.fullname, phone: user.phone,connect: user.connect, image: imageUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// Lister tous les utilisateurs sauf moi (pour démarrer un chat)
+router.get("/all", isAuth, async (req, res) => {
+  try {
+    const me = req.session.userId;
+    const users = await User.find({ _id: { $ne: me } })
+      .select("fullname phone file");
+    const result = users.map(u => ({
+      _id: u._id,
+      fullname: u.fullname,
+      phone: u.phone,
+      image: u.file ? `/upload/${u.file}` : null
+    }));
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+//LOGOUT
+router.post("/logout", async (req, res) => {
+  try {
+    const userId = req.session?.userId;
+
+    if (userId) {
+      // CONNECT FALSE
+      await User.updateOne(
+        { _id: userId },
+        { $set: { connect: false } }
+      );
     }
+
+    req.session.destroy(err => {
+      if (err) return res.status(500).json({ error: "Logout impossible" });
+
+      res.clearCookie("connect.sid");
+      res.json({ redirect: "/pages/login.html" });
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// Récupérer un utilisateur par id (profil)
+router.get("/:id", isAuth, async (req, res) => {
+  try {
+    const u = await User.findById(req.params.id).select("fullname phone file connect");
+    if (!u) return res.status(404).json({ error: "Utilisateur introuvable" });
+
+    const imageUrl = u.file ? `/upload/${u.file}` : null;
+
+    res.json({
+      _id: u._id,
+      fullname: u.fullname,
+      phone: u.phone,
+      image: imageUrl,
+      connect: !!u.connect
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
 });
 
 module.exports = router;
