@@ -29,7 +29,7 @@ router.post("/conversations/direct", isAuth, async (req, res) => {
         participants: [me, otherUserId],
         lastMessageAt: null
       });
-    }
+    } 
 
     res.json({ conversationId: conv._id });
   } catch (e) {
