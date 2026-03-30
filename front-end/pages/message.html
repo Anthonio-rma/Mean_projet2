@@ -8,6 +8,44 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+<style>
+    .btn-pub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: white;
+  text-decoration: none;
+
+  padding: 12px 18px;
+  border-radius: 25px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  transition: all 0.3s ease;
+
+  margin: 10px;
+}
+
+/* hover effet smooth */
+.btn-pub:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+}
+
+/* click effet */
+.btn-pub:active {
+  transform: scale(0.95);
+}
+
+/* icône */
+.btn-pub i {
+  font-size: 14px;
+}
+</style>
 <body>
     <div class="app-container">
         <aside class="sidebar">
@@ -27,12 +65,15 @@
                         <i data-lucide="message-square-plus"></i>
                     </button>
                     <button class="icon-btn"><i data-lucide="more-vertical"></i></button>
-                    <button><a href="createPub.html">Pub</a></button>
                     <button class="icon-btn" id="logoutBtn" title="Déconnexion">
                         <i data-lucide="log-out"></i>
                     </button>
                 </div>
             </header>
+            <a href="createPub.html" class="btn-pub">
+                <i class="fas fa-plus"></i>
+                Nouvelle publication
+            </a>
 
             <div class="search-container">
                 <div class="search-bar">
@@ -47,7 +88,7 @@
         <main class="chat-area">
             <header class="chat-header">
                 <div class="current-contact">
-                    <img id="currentAvatar" src="https://i.pravatar.cc/150?u=unknown" class="avatar-sm" alt="">
+                    <img id="currentAvatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="avatar-sm" alt="">
                 <div class="contact-details">
                     <h3 id="currentName">Sélectionnez une discussion</h3>
                     <span class="status-text" id="currentStatus"></span>

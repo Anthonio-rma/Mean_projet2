@@ -14,6 +14,76 @@
   #cancel { background-color: #ff3b30; color: white; margin-left: 5px; }
   .publication { background-color: #dcf8c6; margin: 10px; padding: 10px; border-radius: 10px; }
   .publication img { max-width: 200px; display: block; margin-top: 10px; border-radius: 5px; }
+
+  /* GRID CONTAINER */
+#publications {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 10px;
+}
+
+/* CARD */
+.pub-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1/1;
+  overflow: hidden;
+  border-radius: 15px;
+  cursor: pointer;
+  background: #f0f2f5;
+}
+
+/* IMAGE */
+.pub-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+/* HOVER ZOOM */
+.pub-card:hover img {
+  transform: scale(1.05);
+}
+
+/* NO IMAGE STYLE */
+.no-image {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.no-image h4 {
+  margin: 0;
+  color: #008069;
+}
+
+.no-image p {
+  font-size: 14px;
+  color: #555;
+}
+
+/* OVERLAY (hover effect) */
+.overlay {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 10px;
+  opacity: 0;
+  transition: 0.3s;
+}
+
+.pub-card:hover .overlay {
+  opacity: 1;
+}
 </style>
 </head>
 <body>
@@ -55,7 +125,7 @@ btnToggle.addEventListener('click', () => {
 cancelBtn.addEventListener('click', () => {
   formContainer.style.display = 'none';
   btnToggle.style.display = 'block';
-  pubsDiv.style.display = 'block'; // 🔹 réafficher les publications
+  pubsDiv.style.display = 'grid'; // 🔹 réafficher les publications
   form.reset();
 });
 
@@ -74,7 +144,7 @@ form.addEventListener('submit', async e => {
   // cacher formulaire après publication et réafficher les pubs
   formContainer.style.display = 'none';
   btnToggle.style.display = 'block';
-  pubsDiv.style.display = 'block';
+  pubsDiv.style.display = 'grid';
   form.reset();
 
   loadPublications();
@@ -84,14 +154,31 @@ form.addEventListener('submit', async e => {
 async function loadPublications() {
   const res = await fetch('/api/publications');
   const pubs = await res.json();
-  pubsDiv.innerHTML = pubs.map(p => `
-    <div class="publication">
-      <strong>${p.titre}</strong> par ${p.auteur.fullname}<br>
-      <p>${p.contenu}</p>
-      ${p.image ? `<img src="${p.image}">` : ''}
-      <small>${p.hashtags.join(' ')}</small>
-    </div>
-  `).join('');
+
+  let html = "";
+
+  for (let i = 0; i < pubs.length; i++) {
+    const p = pubs[i];
+
+    html += `
+      <div class="pub-card">
+        ${p.image 
+          ? `<img src="${p.image}" alt="publication">`
+          : `<div class="no-image">
+              <h4>${p.titre}</h4>
+              <p>${p.contenu.substring(0, 60)}...</p>
+            </div>`
+        }
+
+        <div class="overlay">
+          <span>👤 ${p.auteur.fullname}</span>
+          <span>💬 ${p.hashtags.length}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  pubsDiv.innerHTML = html;
 }
 
 // Chargement initial

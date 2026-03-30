@@ -10,7 +10,7 @@ const User = require("./models/User");
 const app = express();
 const server = http.createServer(app);
 
-// 🔹 Connexion MongoDB
+//  Connexion MongoDB
 connectDB();
 
 // 🔹 Middleware
