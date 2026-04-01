@@ -65,30 +65,32 @@ router.post("/register", upload.single("file"), async (req, res) => {
 })
 
 //LOGIN
-
 router.post("/login", async (req, res) => {
   try {
     const { code, phone, password } = req.body;
 
-    if (code != "+261") return res.status(400).json({ error: "Pays non autorisé" });
+    if (code !== "+261") return res.status(400).json({ error: "Pays non autorisé" });
 
     const user = await User.findOne({ phone });
-    if (!user) return res.status(400).json({ error: "numero inconnue" });
+    if (!user) return res.status(400).json({ error: "Numéro inconnu" });
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: "Mot de passe incorrect" });
 
     if (!req.session) return res.status(500).json({ error: "Session non initialisée" });
 
-    req.session.regenerate(async (err) => {
+    // Régénérer la session
+    req.session.regenerate((err) => {
       if (err) return res.status(500).json({ error: "Impossible de créer la session" });
 
       req.session.userId = user._id;
 
-      await User.updateOne({ _id: user._id }, { $set: { connect: true } });
-
       res.json({ redirect: "/pages/message.html" });
     });
+
+    // 🔥 Mettre connect à true avant la session
+    await User.findByIdAndUpdate(user._id, { connect: true });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
@@ -173,6 +175,60 @@ router.get("/:id", isAuth, async (req, res) => {
     });
   } catch (e) {
     console.error(e);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+//update profile
+router.put("/update", isAuth, upload.single("file"), async (req, res) => {
+  try {
+    const userId = req.session.userId;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    const updateData = {};
+
+    // fullname
+    if (req.body.fullname) {
+      updateData.fullname = req.body.fullname;
+    }
+
+    // phone avec vérification
+    if (req.body.phone) {
+      if (req.body.phone.length > 10) {
+        return res.status(400).json({ error: "numero invalide" });
+      }
+
+      const phoneExists = await User.findOne({
+        phone: req.body.phone,
+        _id: { $ne: userId }
+      });
+
+      if (phoneExists) {
+        return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
+      }
+
+      updateData.phone = req.body.phone;
+    }
+
+    // image
+    if (req.file) {
+      updateData.file = req.file.filename;
+    }
+
+    // update
+    await User.updateOne(
+      { _id: userId },
+      { $set: updateData }
+    );
+
+    res.json({ message: "Profil mis à jour avec succès" });
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
