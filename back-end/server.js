@@ -72,6 +72,7 @@ mongoose
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/posts", require("./routes/postRoutes"));
+app.use("/api/publications", require("./routes/publication"))
 
 // =========================
 // DEFAULT ROUTE

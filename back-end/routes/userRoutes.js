@@ -26,50 +26,60 @@ const upload = multer({ storage });
 // REGISTER
 // =========================
 router.post("/register", upload.single("file"), async (req, res) => {
-    try{
-        if(!req.body.fullname || !req.body.phone){
-            return res.status(400).json({error: 'remplir les champs!'})
-        }
-        const tel = req.body.phone
-        if(tel.length > 10){
-            return res.status(400).json({error: "numero invalide"})
-        }
+  try {
+    const { fullname, phone, email, password, paysname } = req.body;
 
-        const phoneExists = await User.findOne({ phone: req.body.phone });
-        if (phoneExists) return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
-
-        const password = req.body.password
-        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{6,}$/
-        if(!passwordRegex.test(password)){
-            return res.status(400).json({
-                error: "Le mot de passe doit contenir au moins 6 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial"
-            });
-        }
-
-        const hashPassword = await bcrypt.hash(req.body.password, 10)
-        const hashPays = await bcrypt.hash(req.body.paysname, 15)
-
-        const user = new User({
-            fullname: req.body.fullname,
-            email: req.body.email,
-            password: hashPassword,
-            paysname: hashPays,
-            phone: req.body.phone,
-            file: req.file ? req.file.filename : null,
-            connect: false
-        })
-
-        //save to mongoDB
-        await user.save()
-
-        res.clearCookie('connect.sid');
-        //petiti alert de succés
-        res.json({redirect: "/pages/login.html"})
-    } catch (err){
-        console.error(err);
-        res.status(500).json({error: err.message})
+    if (!fullname || !phone || !password) {
+      return res.status(400).json({ error: "Veuillez remplir les champs obligatoires" });
     }
-})
+
+    if (!/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ error: "Numéro invalide" });
+    }
+
+    const phoneExists = await User.findOne({ phone });
+    if (phoneExists) {
+      return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
+    }
+
+    if (email) {
+      const emailExists = await User.findOne({ email: email.trim().toLowerCase() });
+      if (emailExists) {
+        return res.status(400).json({ error: "Cet email est déjà utilisé" });
+      }
+    }
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{6,}$/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        error: "Le mot de passe doit contenir au moins 6 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial"
+      });
+    }
+
+    const hashPassword = await bcrypt.hash(password, 10);
+
+    const user = new User({
+      fullname: fullname.trim(),
+      email: email ? email.trim().toLowerCase() : "",
+      password: hashPassword,
+      paysname: paysname ? paysname.trim() : "",
+      phone: phone.trim(),
+      file: req.file ? req.file.filename : null,
+      connect: false
+    });
+
+    await user.save();
+
+    res.clearCookie("connect.sid");
+    res.json({
+      message: "Inscription réussie",
+      redirect: "/pages/login.html"
+    });
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
+    res.status(500).json({ error: err.message || "Erreur serveur" });
+  }
+});
 
 // =========================
 // LOGIN
@@ -124,7 +134,7 @@ router.post("/logout", isAuth, async (req, res) => {
       await user.save();
     }
 
-    req.session.destroy(err => {
+    req.session.destroy((err) => {
       if (err) {
         console.error("LOGOUT ERROR:", err);
         return res.status(500).json({ error: "Erreur lors de la déconnexion" });
@@ -205,7 +215,13 @@ router.put("/me/update", isAuth, upload.single("file"), async (req, res) => {
       updateData.file = req.file.filename;
     }
 
-    const updated = await User.findByIdAndUpdate(me, updateData, { new: true }).select("-password");
+    const updated = await User.findByIdAndUpdate(me, updateData, {
+      new: true
+    }).select("-password");
+
+    if (!updated) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
 
     res.json({
       message: "Profil mis à jour",
@@ -240,7 +256,7 @@ router.get("/all", isAuth, async (req, res) => {
       "fullname username phone email file bio connect followers following"
     );
 
-    const result = users.map(u => ({
+    const result = users.map((u) => ({
       _id: u._id,
       fullname: u.fullname,
       username: u.username,
@@ -311,16 +327,19 @@ router.post("/:id/follow", isAuth, async (req, res) => {
       return res.status(404).json({ error: "Utilisateur introuvable" });
     }
 
+    if (!Array.isArray(meUser.following)) meUser.following = [];
+    if (!Array.isArray(targetUser.followers)) targetUser.followers = [];
+
     const alreadyFollowing = meUser.following.some(
-      id => String(id) === String(targetId)
+      (id) => String(id) === String(targetId)
     );
 
     if (alreadyFollowing) {
       meUser.following = meUser.following.filter(
-        id => String(id) !== String(targetId)
+        (id) => String(id) !== String(targetId)
       );
       targetUser.followers = targetUser.followers.filter(
-        id => String(id) !== String(me)
+        (id) => String(id) !== String(me)
       );
     } else {
       meUser.following.push(targetId);
@@ -331,15 +350,24 @@ router.post("/:id/follow", isAuth, async (req, res) => {
     await targetUser.save();
 
     res.json({
-      _id: u._id,
-      fullname: u.fullname,
-      username: u.username,
-      phone: u.phone,
-      image: imageUrl,
-      connect: !!u.connect
+      message: alreadyFollowing ? "Utilisateur unfollow" : "Utilisateur follow",
+      following: !alreadyFollowing,
+      targetUser: {
+        _id: targetUser._id,
+        fullname: targetUser.fullname,
+        username: targetUser.username,
+        phone: targetUser.phone,
+        email: targetUser.email,
+        bio: targetUser.bio,
+        paysname: targetUser.paysname,
+        image: targetUser.file ? `/upload/${targetUser.file}` : null,
+        connect: !!targetUser.connect,
+        followersCount: targetUser.followers?.length || 0,
+        followingCount: targetUser.following?.length || 0
+      }
     });
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error("FOLLOW ERROR:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
