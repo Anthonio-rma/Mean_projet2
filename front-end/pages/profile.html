@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profil utilisateur</title>
+  <link rel="stylesheet" href="../wwwroot/styles/profile.css" />
+</head>
+<body>
+  <div class="profile-shell">
+    <aside class="left-menu">
+      <div class="brand-box">
+        <h1>Mini Threads</h1>
+        <p>Profil utilisateur</p>
+      </div>
+
+      <div class="menu-actions">
+        <a href="/pages/feed.html" class="nav-btn">Retour au feed</a>
+        <a href="/pages/message.html" class="nav-btn">Messagerie</a>
+        <button id="logoutBtn" class="nav-btn danger">Déconnexion</button>
+      </div>
+    </aside>
+
+    <main class="profile-main">
+      <section class="profile-card" id="profileCard">
+        <div class="loading-box">Chargement du profil...</div>
+      </section>
+
+      <section class="posts-section">
+        <div class="section-head">
+          <h2>Posts de l’utilisateur</h2>
+          <button id="refreshPostsBtn" class="outline-btn">Actualiser</button>
+        </div>
+
+        <div id="userPostsList" class="posts-list">
+          <div class="loading-box">Chargement des posts...</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="../wwwroot/js/profile.js"></script>
+</body>
+</html>
