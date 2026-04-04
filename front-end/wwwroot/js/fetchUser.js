@@ -53,3 +53,95 @@ window.addEventListener("DOMContentLoaded", () => {
         redirectIfNotAuth: true
     });
 });
+
+// front profile
+async function loadProfile() {
+    const res = await fetch("/api/users/me", {
+        credentials: "include" // nécessaire pour la session
+    });
+    const user = await res.json();
+
+    document.getElementById("profileName").innerText = user.fullname;
+    document.getElementById("profileNameContent").innerText = user.fullname;
+    document.getElementById("profilePhone").innerText = user.phone;
+
+    if (user.image) {
+        document.getElementById("profileImg").src = user.image;
+    }
+
+    //Mettre le status en ligne/hors ligne
+    const sidebarStatusEl = document.getElementById("profileStatus");
+
+    const statusText = user.connect ? "En ligne" : "Hors ligne";
+    if (sidebarStatusEl) sidebarStatusEl.textContent = `Actu : ${statusText}`;
+
+    console.log(user.paysname);
+}
+
+// Affiche le profil au chargement
+loadProfile();
+
+// Fonction pour transformer un div en input et valider l'update
+function makeEditable(divId, fieldName, isSidebar = false) {
+    const div = document.getElementById(divId);
+    const oldValue = div.innerText;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = oldValue;
+    input.style.width = "100%";
+    input.style.fontSize = "18px";
+    input.style.padding = "5px";
+    input.style.border = "1px solid #ccc";
+    input.style.borderRadius = "5px";
+
+    div.innerHTML = "";
+    div.appendChild(input);
+    input.focus();
+
+    // Fonction pour sauvegarder
+    const save = async () => {
+        const newValue = input.value.trim();
+        if (!newValue) {
+            div.innerText = oldValue; // restore
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append(fieldName, newValue);
+
+        const res = await fetch("/api/users/update", {
+            method: "PUT",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+            alert(data.error);
+            div.innerText = oldValue;
+        } else {
+            div.innerText = newValue;
+            if (isSidebar && fieldName === "fullname") {
+                document.getElementById("profileName").innerText = newValue;
+            }
+        }
+    };
+
+    // Enter = save
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") save();
+    });
+
+    // Blur = save
+    input.addEventListener("blur", save);
+}
+
+// Clic sur le bouton edit
+document.querySelectorAll(".edit-btn")[0].addEventListener("click", () => {
+    makeEditable("profileNameContent", "fullname", true);
+});
+
+document.querySelectorAll(".edit-btn")[1].addEventListener("click", () => {
+    makeEditable("profilePhone", "phone");
+});

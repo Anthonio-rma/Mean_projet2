@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require('multer');
 const bcrypt = require("bcrypt");
+const util = require("util");
 //model
 const User = require("../models/User");
 const path = require("path");
@@ -32,7 +33,7 @@ router.post("/register", upload.single("file"), async (req, res) => {
         if (phoneExists) return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
 
         const password = req.body.password
-        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{6,}$/
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{6,}$/;
         if(!passwordRegex.test(password)){
             return res.status(400).json({
                 error: "Le mot de passe doit contenir au moins 6 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial"
@@ -40,13 +41,12 @@ router.post("/register", upload.single("file"), async (req, res) => {
         }
 
         const hashPassword = await bcrypt.hash(req.body.password, 10)
-        const hashPays = await bcrypt.hash(req.body.paysname, 15)
 
         const user = new User({
             fullname: req.body.fullname,
             email: req.body.email,
             password: hashPassword,
-            paysname: hashPays,
+            paysname: req.body.paysname,
             phone: req.body.phone,
             file: req.file ? req.file.filename : null,
             connect: false
@@ -64,7 +64,7 @@ router.post("/register", upload.single("file"), async (req, res) => {
     }
 })
 
-//LOGIN
+// LOGIN
 router.post("/login", async (req, res) => {
   try {
     const { code, phone, password } = req.body;
@@ -79,17 +79,23 @@ router.post("/login", async (req, res) => {
 
     if (!req.session) return res.status(500).json({ error: "Session non initialisée" });
 
-    // Régénérer la session
-    req.session.regenerate((err) => {
-      if (err) return res.status(500).json({ error: "Impossible de créer la session" });
+    // 🔹 Mettre connect à true **avant** de créer la session
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { connect: true },
+      { new: true }
+    );
 
-      req.session.userId = user._id;
+    // 🔹 Régénérer session et enregistrer
+    const regenerateSession = util.promisify(req.session.regenerate).bind(req.session);
+    await regenerateSession();
+    req.session.userId = updatedUser._id;
 
-      res.json({ redirect: "/pages/message.html" });
-    });
+    const saveSession = util.promisify(req.session.save).bind(req.session);
+    await saveSession();
 
-    // 🔥 Mettre connect à true avant la session
-    await User.findByIdAndUpdate(user._id, { connect: true });
+    // 🔹 Retourner user immédiatement avec connect=true
+    res.json({ redirect: "/pages/message.html", user: updatedUser });
 
   } catch (err) {
     console.error(err);
@@ -97,22 +103,28 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// route pour récupérer l'utilisateur connecté
+// /me optimisé
 router.get("/me", isAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.session.userId).select("-password -paysname");
+    const user = await User.findById(req.session.userId).select("-password");
     if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
 
     const imageUrl = user.file ? `/upload/${user.file}` : null;
 
-    //IMPORTANT: renvoyer l'id
-    res.json({ _id: user._id, fullname: user.fullname, phone: user.phone,connect: user.connect, image: imageUrl });
+    res.json({
+      _id: user._id,
+      fullname: user.fullname,
+      paysname: user.paysname,
+      phone: user.phone,
+      connect: user.connect,
+      image: imageUrl
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-
 // Lister tous les utilisateurs sauf moi (pour démarrer un chat)
 router.get("/all", isAuth, async (req, res) => {
   try {
