@@ -1,246 +1,373 @@
 const express = require("express");
 const router = express.Router();
-const multer = require('multer');
 const bcrypt = require("bcrypt");
-const util = require("util");
-//model
-const User = require("../models/User");
 const path = require("path");
-const { error } = require("console");
-//middleware
+const multer = require("multer");
+
+const User = require("../models/User");
 const isAuth = require("../middleware/auth");
 
-//configuration de l upload de l image a ajouter dans db
+// =========================
+// MULTER CONFIG
+// =========================
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'upload/'),
-    filename: (req, file, cb) => cb(null, Date.now() +'-'+file.originalname)
-})
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, "../upload"));
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + "_" + file.originalname.replace(/\s+/g, "_");
+    cb(null, uniqueName);
+  }
+});
 
-const upload = multer({storage})
+const upload = multer({ storage });
 
-//route inscription user
+// =========================
+// REGISTER
+// =========================
 router.post("/register", upload.single("file"), async (req, res) => {
-    try{
-        if(!req.body.fullname || !req.body.phone){
-            return res.status(400).json({error: 'remplir les champs!'})
-        }
-        const tel = req.body.phone
-        if(tel.length > 10){
-            return res.status(400).json({error: "numero invalide"})
-        }
+  try {
+    const { fullname, phone, email, password, paysname } = req.body;
 
-        const phoneExists = await User.findOne({ phone: req.body.phone });
-        if (phoneExists) return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
-
-        const password = req.body.password
-        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{6,}$/;
-        if(!passwordRegex.test(password)){
-            return res.status(400).json({
-                error: "Le mot de passe doit contenir au moins 6 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial"
-            });
-        }
-
-        const hashPassword = await bcrypt.hash(req.body.password, 10)
-
-        const user = new User({
-            fullname: req.body.fullname,
-            email: req.body.email,
-            password: hashPassword,
-            paysname: req.body.paysname,
-            phone: req.body.phone,
-            file: req.file ? req.file.filename : null,
-            connect: false
-        })
-
-        //save to mongoDB
-        await user.save()
-
-        res.clearCookie('connect.sid');
-        //petiti alert de succés
-        res.json({redirect: "/pages/login.html"})
-    } catch (err){
-        console.error(err);
-        res.status(500).json({error: err.message})
+    if (!fullname || !phone || !password) {
+      return res.status(400).json({ error: "Veuillez remplir les champs obligatoires" });
     }
-})
 
+    if (!/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ error: "Numéro invalide" });
+    }
+
+    const phoneExists = await User.findOne({ phone });
+    if (phoneExists) {
+      return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
+    }
+
+    if (email) {
+      const emailExists = await User.findOne({ email: email.trim().toLowerCase() });
+      if (emailExists) {
+        return res.status(400).json({ error: "Cet email est déjà utilisé" });
+      }
+    }
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{6,}$/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        error: "Le mot de passe doit contenir au moins 6 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial"
+      });
+    }
+
+    const hashPassword = await bcrypt.hash(password, 10);
+
+    const user = new User({
+      fullname: fullname.trim(),
+      email: email ? email.trim().toLowerCase() : "",
+      password: hashPassword,
+      paysname: paysname ? paysname.trim() : "",
+      phone: phone.trim(),
+      file: req.file ? req.file.filename : null,
+      connect: false
+    });
+
+    await user.save();
+
+    res.clearCookie("connect.sid");
+    res.json({
+      message: "Inscription réussie",
+      redirect: "/pages/login.html"
+    });
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
+    res.status(500).json({ error: err.message || "Erreur serveur" });
+  }
+});
+
+// =========================
 // LOGIN
+// =========================
 router.post("/login", async (req, res) => {
   try {
-    const { code, phone, password } = req.body;
+    const { phone, password } = req.body;
 
-    if (code !== "+261") return res.status(400).json({ error: "Pays non autorisé" });
-
-    const user = await User.findOne({ phone });
-    if (!user) return res.status(400).json({ error: "Numéro inconnu" });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ error: "Mot de passe incorrect" });
-
-    if (!req.session) return res.status(500).json({ error: "Session non initialisée" });
-
-    // 🔹 Mettre connect à true **avant** de créer la session
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      { connect: true },
-      { new: true }
-    );
-
-    // 🔹 Régénérer session et enregistrer
-    const regenerateSession = util.promisify(req.session.regenerate).bind(req.session);
-    await regenerateSession();
-    req.session.userId = updatedUser._id;
-
-    const saveSession = util.promisify(req.session.save).bind(req.session);
-    await saveSession();
-
-    // 🔹 Retourner user immédiatement avec connect=true
-    res.json({ redirect: "/pages/message.html", user: updatedUser });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-// /me optimisé
-router.get("/me", isAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.session.userId).select("-password");
-    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
-
-    const imageUrl = user.file ? `/upload/${user.file}` : null;
-
-    res.json({
-      _id: user._id,
-      fullname: user.fullname,
-      paysname: user.paysname,
-      phone: user.phone,
-      connect: user.connect,
-      image: imageUrl
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-// Lister tous les utilisateurs sauf moi (pour démarrer un chat)
-router.get("/all", isAuth, async (req, res) => {
-  try {
-    const me = req.session.userId;
-    const users = await User.find({ _id: { $ne: me } })
-      .select("fullname phone file");
-    const result = users.map(u => ({
-      _id: u._id,
-      fullname: u.fullname,
-      phone: u.phone,
-      image: u.file ? `/upload/${u.file}` : null
-    }));
-    res.json(result);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-//LOGOUT
-router.post("/logout", async (req, res) => {
-  try {
-    const userId = req.session?.userId;
-
-    if (userId) {
-      // CONNECT FALSE
-      await User.updateOne(
-        { _id: userId },
-        { $set: { connect: false } }
-      );
+    if (!phone || !password) {
+      return res.status(400).json({ error: "Téléphone et mot de passe obligatoires" });
     }
 
-    req.session.destroy(err => {
-      if (err) return res.status(500).json({ error: "Logout impossible" });
-
-      res.clearCookie("connect.sid");
-      res.json({ redirect: "/pages/login.html" });
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-// Récupérer un utilisateur par id (profil)
-router.get("/:id", isAuth, async (req, res) => {
-  try {
-    const u = await User.findById(req.params.id).select("fullname phone file connect");
-    if (!u) return res.status(404).json({ error: "Utilisateur introuvable" });
-
-    const imageUrl = u.file ? `/upload/${u.file}` : null;
-
-    res.json({
-      _id: u._id,
-      fullname: u.fullname,
-      phone: u.phone,
-      image: imageUrl,
-      connect: !!u.connect
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-//update profile
-router.put("/update", isAuth, upload.single("file"), async (req, res) => {
-  try {
-    const userId = req.session.userId;
-
-    const user = await User.findById(userId);
+    const user = await User.findOne({ phone });
     if (!user) {
       return res.status(404).json({ error: "Utilisateur introuvable" });
     }
 
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Mot de passe incorrect" });
+    }
+
+    req.session.userId = user._id;
+
+    user.connect = true;
+    await user.save();
+
+    res.json({
+      message: "Connexion réussie",
+      redirect: "/pages/feed.html",
+      user: {
+        _id: user._id,
+        fullname: user.fullname,
+        username: user.username,
+        phone: user.phone
+      }
+    });
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// =========================
+// LOGOUT
+// =========================
+router.post("/logout", isAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (user) {
+      user.connect = false;
+      await user.save();
+    }
+
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("LOGOUT ERROR:", err);
+        return res.status(500).json({ error: "Erreur lors de la déconnexion" });
+      }
+
+      res.clearCookie("connect.sid");
+      res.json({
+        message: "Déconnexion réussie",
+        redirect: "/pages/login.html"
+      });
+    });
+  } catch (err) {
+    console.error("LOGOUT ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// =========================
+// GET CURRENT USER
+// =========================
+router.get("/me", isAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    res.json({
+      _id: user._id,
+      fullname: user.fullname,
+      username: user.username,
+      phone: user.phone,
+      email: user.email,
+      bio: user.bio,
+      paysname: user.paysname,
+      connect: user.connect,
+      image: user.file ? `/upload/${user.file}` : null,
+      followersCount: user.followers?.length || 0,
+      followingCount: user.following?.length || 0
+    });
+  } catch (err) {
+    console.error("ME ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// =========================
+// UPDATE CURRENT USER
+// =========================
+router.put("/me/update", isAuth, upload.single("file"), async (req, res) => {
+  try {
+    const me = req.session.userId;
+    const { fullname, username, bio, email, paysname } = req.body;
+
     const updateData = {};
 
-    // fullname
-    if (req.body.fullname) {
-      updateData.fullname = req.body.fullname;
-    }
+    if (fullname !== undefined) updateData.fullname = fullname.trim();
+    if (bio !== undefined) updateData.bio = bio.trim();
+    if (email !== undefined) updateData.email = email.trim().toLowerCase();
+    if (paysname !== undefined) updateData.paysname = paysname.trim();
 
-    // phone avec vérification
-    if (req.body.phone) {
-      if (req.body.phone.length > 10) {
-        return res.status(400).json({ error: "numero invalide" });
-      }
+    if (username !== undefined) {
+      const normalizedUsername = username.trim().toLowerCase();
 
-      const phoneExists = await User.findOne({
-        phone: req.body.phone,
-        _id: { $ne: userId }
+      const existing = await User.findOne({
+        username: normalizedUsername,
+        _id: { $ne: me }
       });
 
-      if (phoneExists) {
-        return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
+      if (existing) {
+        return res.status(400).json({ error: "Username déjà utilisé" });
       }
 
-      updateData.phone = req.body.phone;
+      updateData.username = normalizedUsername;
     }
 
-    // image
     if (req.file) {
       updateData.file = req.file.filename;
     }
 
-    // update
-    await User.updateOne(
-      { _id: userId },
-      { $set: updateData }
+    const updated = await User.findByIdAndUpdate(me, updateData, {
+      new: true
+    }).select("-password");
+
+    if (!updated) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    res.json({
+      message: "Profil mis à jour",
+      user: {
+        _id: updated._id,
+        fullname: updated.fullname,
+        username: updated.username,
+        phone: updated.phone,
+        email: updated.email,
+        bio: updated.bio,
+        paysname: updated.paysname,
+        image: updated.file ? `/upload/${updated.file}` : null,
+        connect: updated.connect,
+        followersCount: updated.followers?.length || 0,
+        followingCount: updated.following?.length || 0
+      }
+    });
+  } catch (err) {
+    console.error("UPDATE PROFILE ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// =========================
+// GET ALL USERS
+// =========================
+router.get("/all", isAuth, async (req, res) => {
+  try {
+    const me = req.session.userId;
+
+    const users = await User.find({ _id: { $ne: me } }).select(
+      "fullname username phone email file bio connect followers following"
     );
 
-    res.json({ message: "Profil mis à jour avec succès" });
+    const result = users.map((u) => ({
+      _id: u._id,
+      fullname: u.fullname,
+      username: u.username,
+      phone: u.phone,
+      email: u.email,
+      bio: u.bio,
+      connect: u.connect,
+      image: u.file ? `/upload/${u.file}` : null,
+      followersCount: u.followers?.length || 0,
+      followingCount: u.following?.length || 0
+    }));
 
+    res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error("ALL USERS ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// =========================
+// GET USER BY ID
+// =========================
+router.get("/:id", isAuth, async (req, res) => {
+  try {
+    const u = await User.findById(req.params.id).select(
+      "fullname username phone email bio file connect followers following paysname"
+    );
+
+    if (!u) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    res.json({
+      _id: u._id,
+      fullname: u.fullname,
+      username: u.username,
+      phone: u.phone,
+      email: u.email,
+      bio: u.bio,
+      paysname: u.paysname,
+      image: u.file ? `/upload/${u.file}` : null,
+      connect: !!u.connect,
+      followersCount: u.followers?.length || 0,
+      followingCount: u.following?.length || 0
+    });
+  } catch (err) {
+    console.error("GET USER BY ID ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// =========================
+// FOLLOW / UNFOLLOW
+// =========================
+router.post("/:id/follow", isAuth, async (req, res) => {
+  try {
+    const me = req.session.userId;
+    const targetId = req.params.id;
+
+    if (String(me) === String(targetId)) {
+      return res.status(400).json({ error: "Impossible de se suivre soi-même" });
+    }
+
+    const meUser = await User.findById(me);
+    const targetUser = await User.findById(targetId);
+
+    if (!meUser || !targetUser) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    if (!Array.isArray(meUser.following)) meUser.following = [];
+    if (!Array.isArray(targetUser.followers)) targetUser.followers = [];
+
+    const alreadyFollowing = meUser.following.some(
+      (id) => String(id) === String(targetId)
+    );
+
+    if (alreadyFollowing) {
+      meUser.following = meUser.following.filter(
+        (id) => String(id) !== String(targetId)
+      );
+      targetUser.followers = targetUser.followers.filter(
+        (id) => String(id) !== String(me)
+      );
+    } else {
+      meUser.following.push(targetId);
+      targetUser.followers.push(me);
+    }
+
+    await meUser.save();
+    await targetUser.save();
+
+    res.json({
+      message: alreadyFollowing ? "Utilisateur unfollow" : "Utilisateur follow",
+      following: !alreadyFollowing,
+      targetUser: {
+        _id: targetUser._id,
+        fullname: targetUser.fullname,
+        username: targetUser.username,
+        phone: targetUser.phone,
+        email: targetUser.email,
+        bio: targetUser.bio,
+        paysname: targetUser.paysname,
+        image: targetUser.file ? `/upload/${targetUser.file}` : null,
+        connect: !!targetUser.connect,
+        followersCount: targetUser.followers?.length || 0,
+        followingCount: targetUser.following?.length || 0
+      }
+    });
+  } catch (err) {
+    console.error("FOLLOW ERROR:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
