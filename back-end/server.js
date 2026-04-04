@@ -1,110 +1,151 @@
 const express = require("express");
+const mongoose = require("mongoose");
+const session = require("express-session");
+const MongoStore = require("connect-mongo").default;
+const path = require("path");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-const open = (...args) => import("open").then(mod => mod.default(...args));
-const connectDB = require("./config/db");
-const session = require("express-session");
-const path = require("path");
-const User = require("./models/User"); // <-- ajuste si chemin différent
+require("dotenv").config();
+
+const User = require("./models/User");
 
 const app = express();
-
-// 🔥 rendre le dossier front accessible
-app.use(express.static(path.join(__dirname, "../front-end")));
-// dossier upload accessible depuis le front
-app.use("/upload", express.static(path.join(__dirname, "upload")));
-
-// Connexion à MongoDB
-connectDB();
-
-// Middleware JSON et CORS
-app.use(express.json());
-
-// ⚠️ CORS : si ton front est servi par CE serveur (http://localhost:3000), c’est OK.
-// Si ton front est sur un autre port (ex: 5500), remplace origin.
-app.use(cors({
-  origin: "http://localhost:3000",
-  credentials: true
-}));
-
-// ✅ Session middleware (on le garde dans une variable pour le partager à socket.io)
-const sessionMiddleware = session({
-  secret: "mon_secret_ultra_secure",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 } // 1h
-});
-app.use(sessionMiddleware);
-
-// Routes API
-app.use("/api/users", require("./routes/userRoutes"));
-app.use("/api/chat", require("./routes/chatRoutes"));
-
-// SPA fallback
-app.use((req, res, next) => {
-  if (!req.path.startsWith("/api")) {
-    res.sendFile(path.join(__dirname, "../front-end/index.html"));
-  } else {
-    next();
-  }
-});
-
-// ✅ créer serveur HTTP
 const server = http.createServer(app);
 
-// ✅ socket.io
+// =========================
+// SOCKET.IO
+// =========================
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: true,
     credentials: true
   }
 });
 
-// ✅ partager session Express avec Socket.io
-io.use((socket, next) => {
-  sessionMiddleware(socket.request, {}, next);
-});
+// =========================
+// MIDDLEWARES
+// =========================
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 
-// ✅ logique socket
-io.on("connection", async (socket) => {
-  const userId = socket.request.session?.userId;
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-  // si pas authentifié -> on coupe
-  if (!userId) {
-    socket.disconnect(true);
-    return;
-  }
+// =========================
+// STATIC FILES
+// =========================
+app.use("/upload", express.static(path.join(__dirname, "upload")));
+app.use(express.static(path.join(__dirname, "../front-end")));
 
-  // connect=true
-  await User.updateOne({ _id: userId }, { $set: { connect: true } });
+// =========================
+// SESSION
+// =========================
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "mini_threads_secret_key",
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mini_threads"
+    }),
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24,
+      httpOnly: true
+    }
+  })
+);
 
-  // broadcast présence
-  io.emit("presence", { userId: String(userId), online: true });
-
-  // rejoindre une conversation (room)
-  socket.on("joinConversation", (conversationId) => {
-    if (!conversationId) return;
-    socket.join(`conv:${conversationId}`);
+// =========================
+// DATABASE
+// =========================
+mongoose
+  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mini_threads")
+  .then(() => {
+    console.log("MongoDB connecté");
+  })
+  .catch(err => {
+    console.error("Erreur MongoDB :", err);
   });
 
-  socket.on("leaveConversation", (conversationId) => {
-    if (!conversationId) return;
-    socket.leave(`conv:${conversationId}`);
+// =========================
+// ROUTES
+// =========================
+app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/chat", require("./routes/chatRoutes"));
+app.use("/api/posts", require("./routes/postRoutes"));
+
+// =========================
+// DEFAULT ROUTE
+// =========================
+app.get("/", (req, res) => {
+  res.redirect("/pages/login.html");
+});
+
+// =========================
+// SOCKET LOGIC
+// =========================
+const onlineUsers = new Map();
+
+io.on("connection", socket => {
+  console.log("Socket connecté :", socket.id);
+
+  socket.on("join", async userId => {
+    try {
+      onlineUsers.set(String(userId), socket.id);
+      await User.findByIdAndUpdate(userId, { connect: true });
+      io.emit("users:online", Array.from(onlineUsers.keys()));
+    } catch (err) {
+      console.error("SOCKET JOIN ERROR:", err);
+    }
+  });
+
+  socket.on("private message", data => {
+    try {
+      const { toUserId, message, fromUserId } = data;
+      const targetSocketId = onlineUsers.get(String(toUserId));
+
+      if (targetSocketId) {
+        io.to(targetSocketId).emit("private message", {
+          fromUserId,
+          message
+        });
+      }
+    } catch (err) {
+      console.error("PRIVATE MESSAGE ERROR:", err);
+    }
   });
 
   socket.on("disconnect", async () => {
-    // connect=false
-    await User.updateOne({ _id: userId }, { $set: { connect: false } });
-    io.emit("presence", { userId: String(userId), online: false });
+    try {
+      let disconnectedUserId = null;
+
+      for (const [userId, socketId] of onlineUsers.entries()) {
+        if (socketId === socket.id) {
+          disconnectedUserId = userId;
+          break;
+        }
+      }
+
+      if (disconnectedUserId) {
+        onlineUsers.delete(disconnectedUserId);
+        await User.findByIdAndUpdate(disconnectedUserId, { connect: false });
+      }
+
+      io.emit("users:online", Array.from(onlineUsers.keys()));
+      console.log("Socket déconnecté :", socket.id);
+    } catch (err) {
+      console.error("SOCKET DISCONNECT ERROR:", err);
+    }
   });
 });
 
-// rendre io accessible dans les routes (chatRoutes)
-app.set("io", io);
-
-
-server.listen(3000, () => {
-  console.log("Serveur + Socket.io lancé sur http://localhost:3000");
-  open("http://localhost:3000");
+// =========================
+// START SERVER
+// =========================
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Serveur lancé sur http://localhost:${PORT}`);
 });
