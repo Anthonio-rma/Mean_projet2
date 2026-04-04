@@ -58,7 +58,7 @@ router.post("/register", upload.single("file"), async (req, res) => {
     }
 
     const hashPassword = await bcrypt.hash(password, 10);
-
+    
     const user = new User({
       fullname: fullname.trim(),
       username: normalizedUsername,
@@ -87,6 +87,10 @@ router.post("/register", upload.single("file"), async (req, res) => {
         image: user.file ? `/upload/${user.file}` : null
       }
     });
+
+    // 🔥 Mettre connect à true avant la session
+    await User.findByIdAndUpdate(user._id, { connect: true });
+
   } catch (err) {
     console.error("REGISTER ERROR:", err);
     res.status(500).json({ error: "Erreur serveur" });
@@ -422,6 +426,60 @@ router.get("/:id/following", isAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("FOLLOWING ERROR:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+//update profile
+router.put("/update", isAuth, upload.single("file"), async (req, res) => {
+  try {
+    const userId = req.session.userId;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    const updateData = {};
+
+    // fullname
+    if (req.body.fullname) {
+      updateData.fullname = req.body.fullname;
+    }
+
+    // phone avec vérification
+    if (req.body.phone) {
+      if (req.body.phone.length > 10) {
+        return res.status(400).json({ error: "numero invalide" });
+      }
+
+      const phoneExists = await User.findOne({
+        phone: req.body.phone,
+        _id: { $ne: userId }
+      });
+
+      if (phoneExists) {
+        return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
+      }
+
+      updateData.phone = req.body.phone;
+    }
+
+    // image
+    if (req.file) {
+      updateData.file = req.file.filename;
+    }
+
+    // update
+    await User.updateOne(
+      { _id: userId },
+      { $set: updateData }
+    );
+
+    res.json({ message: "Profil mis à jour avec succès" });
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });

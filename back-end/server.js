@@ -22,6 +22,7 @@ const io = new Server(server, {
     credentials: true
   }
 });
+io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
 // =========================
 // MIDDLEWARES
