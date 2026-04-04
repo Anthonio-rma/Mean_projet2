@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Profil WhatsApp Web</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: #fff;
+            width: 80%;
+            max-width: 900px;
+            display: flex;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            overflow: hidden;
+            border: 1px solid #e9edef;
+        }
+
+        .sidebar-green {
+            background-color: #008069;
+            width: 350px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .profile-img-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .profile-img {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            object-fit: cover;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .sidebar-green h2 {
+            margin: 15px 0 5px 0;
+            font-size: 24px;
+        }
+
+        .sidebar-green p {
+            opacity: 0.9;
+            font-style: italic;
+        }
+
+        .content {
+            flex: 1;
+            padding: 50px;
+            background-color: #fff;
+        }
+
+        .section-title {
+            color: #00a884;
+            text-transform: uppercase;
+            font-size: 13px;
+            letter-spacing: 1px;
+            font-weight: 600;
+            margin-bottom: 30px;
+        }
+
+        .info-group {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 35px;
+            border-bottom: 1px solid #f0f2f5;
+            padding-bottom: 15px;
+        }
+
+        .info-group i {
+            color: #8696a0;
+            font-size: 20px;
+            width: 50px;
+            margin-top: 5px;
+        }
+
+        .info-detail {
+            flex: 1;
+        }
+
+        .info-detail label {
+            display: block;
+            color: #8696a0;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .info-detail .value {
+            color: #3b4a54;
+            font-size: 18px;
+            font-weight: 400;
+        }
+
+        .footer-note {
+            font-size: 12px;
+            color: #8696a0;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+
+        .edit-btn {
+            color: #00a884;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .edit-btn:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar-green">
+            <div class="profile-img-container">
+                <img id="profileImg" src="https://via.placeholder.com/200" alt="Photo de profil" class="profile-img">
+            </div>
+            <h2 id="profileName">Prénom</h2>
+            <p id="profileStatus">Actu : En ligne</p>
+        </div>
+
+        <!-- Contenu -->
+        <div class="content">
+            <div class="section-title">Informations personnelles</div>
+
+            <div class="info-group">
+                <i class="fas fa-user"></i>
+                <div class="info-detail">
+                    <label>Votre nom</label>
+                    <div id="profileNameContent" class="value"></div>
+                    <div class="footer-note">Ce nom sera visible par vos contacts sur WhatsApp.</div>
+                </div>
+                <div class="edit-btn"><i class="fas fa-pen"></i></div>
+            </div>
+            
+            <div class="info-group">
+                <i class="fas fa-phone"></i>
+                <div class="info-detail">
+                    <label>Téléphone</label>
+                    <div id="profilePhone" class="value"></div>
+                </div>
+                <div class="edit-btn"><i class="fas fa-pen"></i></div>
+            </div>
+        </div>
+    </div>
+</body>
+<script src="../wwwroot/js/fetchUser.js"></script>
+<script>
+async function loadProfile() {
+    const res = await fetch("/api/users/me");
+    const user = await res.json();
+
+    document.getElementById("profileName").innerText = user.fullname;
+    document.getElementById("profileNameContent").innerText = user.fullname;
+    document.getElementById("profilePhone").innerText = user.phone;
+
+    if (user.image) {
+        document.getElementById("profileImg").src = user.image;
+    }
+}
+
+// Affiche le profil au chargement
+loadProfile();
+
+// Fonction pour transformer un div en input et valider l'update
+function makeEditable(divId, fieldName, isSidebar = false) {
+    const div = document.getElementById(divId);
+    const oldValue = div.innerText;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = oldValue;
+    input.style.width = "100%";
+    input.style.fontSize = "18px";
+    input.style.padding = "5px";
+    input.style.border = "1px solid #ccc";
+    input.style.borderRadius = "5px";
+
+    div.innerHTML = "";
+    div.appendChild(input);
+    input.focus();
+
+    // Fonction pour sauvegarder
+    const save = async () => {
+        const newValue = input.value.trim();
+        if (!newValue) {
+            div.innerText = oldValue; // restore
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append(fieldName, newValue);
+
+        const res = await fetch("/api/users/update", {
+            method: "PUT",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+            alert(data.error);
+            div.innerText = oldValue;
+        } else {
+            div.innerText = newValue;
+            if (isSidebar && fieldName === "fullname") {
+                document.getElementById("profileName").innerText = newValue;
+            }
+        }
+    };
+
+    // Enter = save
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") save();
+    });
+
+    // Blur = save
+    input.addEventListener("blur", save);
+}
+
+// Clic sur le bouton edit ✏️
+document.querySelectorAll(".edit-btn")[0].addEventListener("click", () => {
+    makeEditable("profileNameContent", "fullname", true);
+});
+
+document.querySelectorAll(".edit-btn")[1].addEventListener("click", () => {
+    makeEditable("profilePhone", "phone");
+});
+</script>
+</html>
