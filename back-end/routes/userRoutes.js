@@ -26,76 +26,50 @@ const upload = multer({ storage });
 // REGISTER
 // =========================
 router.post("/register", upload.single("file"), async (req, res) => {
-  try {
-    const { fullname, username, email, password, paysname, phone } = req.body;
+    try{
+        if(!req.body.fullname || !req.body.phone){
+            return res.status(400).json({error: 'remplir les champs!'})
+        }
+        const tel = req.body.phone
+        if(tel.length > 10){
+            return res.status(400).json({error: "numero invalide"})
+        }
 
-    if (!fullname || !password || !phone) {
-      return res.status(400).json({
-        error: "fullname, password et phone sont obligatoires"
-      });
+        const phoneExists = await User.findOne({ phone: req.body.phone });
+        if (phoneExists) return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
+
+        const password = req.body.password
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{6,}$/
+        if(!passwordRegex.test(password)){
+            return res.status(400).json({
+                error: "Le mot de passe doit contenir au moins 6 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial"
+            });
+        }
+
+        const hashPassword = await bcrypt.hash(req.body.password, 10)
+        const hashPays = await bcrypt.hash(req.body.paysname, 15)
+
+        const user = new User({
+            fullname: req.body.fullname,
+            email: req.body.email,
+            password: hashPassword,
+            paysname: hashPays,
+            phone: req.body.phone,
+            file: req.file ? req.file.filename : null,
+            connect: false
+        })
+
+        //save to mongoDB
+        await user.save()
+
+        res.clearCookie('connect.sid');
+        //petiti alert de succés
+        res.json({redirect: "/pages/login.html"})
+    } catch (err){
+        console.error(err);
+        res.status(500).json({error: err.message})
     }
-
-    const existingPhone = await User.findOne({ phone });
-    if (existingPhone) {
-      return res.status(400).json({ error: "Téléphone déjà utilisé" });
-    }
-
-    const normalizedUsername = username
-      ? username.trim().toLowerCase()
-      : `user_${phone}`;
-
-    const existingUsername = await User.findOne({ username: normalizedUsername });
-    if (existingUsername) {
-      return res.status(400).json({ error: "Username déjà utilisé" });
-    }
-
-    const normalizedEmail = email ? email.trim().toLowerCase() : "";
-    if (normalizedEmail) {
-      const existingEmail = await User.findOne({ email: normalizedEmail });
-      if (existingEmail) {
-        return res.status(400).json({ error: "Email déjà utilisé" });
-      }
-    }
-
-    const hashPassword = await bcrypt.hash(password, 10);
-    
-    const user = new User({
-      fullname: fullname.trim(),
-      username: normalizedUsername,
-      email: normalizedEmail,
-      password: hashPassword,
-      paysname: paysname || "",
-      phone: phone.trim(),
-      bio: "",
-      file: req.file ? req.file.filename : null,
-      connect: false,
-      followers: [],
-      following: []
-    });
-
-    await user.save();
-
-    res.status(201).json({
-      message: "Inscription réussie",
-      user: {
-        _id: user._id,
-        fullname: user.fullname,
-        username: user.username,
-        phone: user.phone,
-        email: user.email,
-        bio: user.bio,
-        image: user.file ? `/upload/${user.file}` : null
-      }
-    });
-
-    // 🔥 Mettre connect à true avant la session
-    await User.findByIdAndUpdate(user._id, { connect: true });
-
-  } catch (err) {
-    console.error("REGISTER ERROR:", err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
+})
 
 // =========================
 // LOGIN
@@ -357,129 +331,15 @@ router.post("/:id/follow", isAuth, async (req, res) => {
     await targetUser.save();
 
     res.json({
-      ok: true,
-      following: !alreadyFollowing,
-      followersCount: targetUser.followers.length,
-      followingCount: meUser.following.length
+      _id: u._id,
+      fullname: u.fullname,
+      username: u.username,
+      phone: u.phone,
+      image: imageUrl,
+      connect: !!u.connect
     });
-  } catch (err) {
-    console.error("FOLLOW ERROR:", err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-// =========================
-// GET FOLLOWERS
-// =========================
-router.get("/:id/followers", isAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).populate(
-      "followers",
-      "fullname username file phone bio connect"
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: "Utilisateur introuvable" });
-    }
-
-    const result = user.followers.map(u => ({
-      _id: u._id,
-      fullname: u.fullname,
-      username: u.username,
-      phone: u.phone,
-      bio: u.bio,
-      connect: u.connect,
-      image: u.file ? `/upload/${u.file}` : null
-    }));
-
-    res.json(result);
-  } catch (err) {
-    console.error("FOLLOWERS ERROR:", err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-// =========================
-// GET FOLLOWING
-// =========================
-router.get("/:id/following", isAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).populate(
-      "following",
-      "fullname username file phone bio connect"
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: "Utilisateur introuvable" });
-    }
-
-    const result = user.following.map(u => ({
-      _id: u._id,
-      fullname: u.fullname,
-      username: u.username,
-      phone: u.phone,
-      bio: u.bio,
-      connect: u.connect,
-      image: u.file ? `/upload/${u.file}` : null
-    }));
-
-    res.json(result);
-  } catch (err) {
-    console.error("FOLLOWING ERROR:", err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-//update profile
-router.put("/update", isAuth, upload.single("file"), async (req, res) => {
-  try {
-    const userId = req.session.userId;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "Utilisateur introuvable" });
-    }
-
-    const updateData = {};
-
-    // fullname
-    if (req.body.fullname) {
-      updateData.fullname = req.body.fullname;
-    }
-
-    // phone avec vérification
-    if (req.body.phone) {
-      if (req.body.phone.length > 10) {
-        return res.status(400).json({ error: "numero invalide" });
-      }
-
-      const phoneExists = await User.findOne({
-        phone: req.body.phone,
-        _id: { $ne: userId }
-      });
-
-      if (phoneExists) {
-        return res.status(400).json({ error: "Ce numéro est déjà utilisé" });
-      }
-
-      updateData.phone = req.body.phone;
-    }
-
-    // image
-    if (req.file) {
-      updateData.file = req.file.filename;
-    }
-
-    // update
-    await User.updateOne(
-      { _id: userId },
-      { $set: updateData }
-    );
-
-    res.json({ message: "Profil mis à jour avec succès" });
-
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });

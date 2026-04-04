@@ -12,20 +12,15 @@ const User = require("./models/User");
 
 const app = express();
 const server = http.createServer(app);
-
-// =========================
-// SOCKET.IO
-// =========================
 const io = new Server(server, {
   cors: {
     origin: true,
     credentials: true
   }
 });
-io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
 // =========================
-// MIDDLEWARES
+// MIDDLEWARE
 // =========================
 app.use(cors({
   origin: true,
@@ -38,8 +33,8 @@ app.use(express.urlencoded({ extended: true }));
 // =========================
 // STATIC FILES
 // =========================
-app.use("/upload", express.static(path.join(__dirname, "upload")));
 app.use(express.static(path.join(__dirname, "../front-end")));
+app.use("/upload", express.static(path.join(__dirname, "upload")));
 
 // =========================
 // SESSION
@@ -67,7 +62,7 @@ mongoose
   .then(() => {
     console.log("MongoDB connecté");
   })
-  .catch(err => {
+  .catch((err) => {
     console.error("Erreur MongoDB :", err);
   });
 
@@ -90,10 +85,10 @@ app.get("/", (req, res) => {
 // =========================
 const onlineUsers = new Map();
 
-io.on("connection", socket => {
+io.on("connection", (socket) => {
   console.log("Socket connecté :", socket.id);
 
-  socket.on("join", async userId => {
+  socket.on("join", async (userId) => {
     try {
       onlineUsers.set(String(userId), socket.id);
       await User.findByIdAndUpdate(userId, { connect: true });
@@ -103,7 +98,7 @@ io.on("connection", socket => {
     }
   });
 
-  socket.on("private message", data => {
+  socket.on("private message", (data) => {
     try {
       const { toUserId, message, fromUserId } = data;
       const targetSocketId = onlineUsers.get(String(toUserId));
