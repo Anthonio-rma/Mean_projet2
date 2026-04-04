@@ -1,10 +1,10 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const session = require("express-session");
 const MongoStore = require("connect-mongo").default;
 const path = require("path");
 const cors = require("cors");
 const http = require("http");
+const connectDB = require("./config/db")
 const { Server } = require("socket.io");
 require("dotenv").config();
 
@@ -57,14 +57,7 @@ app.use(
 // =========================
 // DATABASE
 // =========================
-mongoose
-  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mini_threads")
-  .then(() => {
-    console.log("MongoDB connecté");
-  })
-  .catch((err) => {
-    console.error("Erreur MongoDB :", err);
-  });
+connectDB();
 
 // =========================
 // ROUTES
