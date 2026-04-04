@@ -1,11 +1,10 @@
-// chat.js (version corrigée + socket.io + profil modal + room join)
-// ⚠️ Assure-toi que message.html charge d'abord : <script src="/socket.io/socket.io.js"></script>
-
+// chat.js (version améliorée avec fetch complet des utilisateurs + avatars)
 const API_BASE = "http://localhost:3000";
 
 let socket = null;
 let me = null;
 let currentConversationId = null;
+let allUsers = []; // 🔥 stocke tous les users pour référence
 
 // DOM elements
 const conversationList = document.getElementById("conversationList");
@@ -48,9 +47,7 @@ function escapeHtml(s) {
 
 function formatTime(dateStr) {
   const d = new Date(dateStr);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 async function fetchJSON(path, options = {}) {
@@ -59,7 +56,6 @@ async function fetchJSON(path, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
-
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -67,28 +63,15 @@ async function fetchJSON(path, options = {}) {
 
 // --- Socket ---
 function initSocket() {
-  if (typeof window.io !== "function") {
-    console.error("socket.io client introuvable. Ajoute <script src='/socket.io/socket.io.js'></script> dans message.html");
-    return;
-  }
+  if (typeof window.io !== "function") return console.error("Socket.io client non chargé");
+  socket = io(API_BASE, { withCredentials: true });
 
-  socket = window.io(API_BASE, { withCredentials: true });
-
-  socket.on("connect", () => {
-    console.log("✅ socket connected:", socket.id);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("⚠️ socket disconnected");
-  });
+  socket.on("connect", () => console.log("✅ Socket connecté:", socket.id));
+  socket.on("disconnect", () => console.log("⚠️ Socket déconnecté"));
 
   socket.on("newMessage", (msg) => {
-    // ✅ éviter doublon : si c'est moi qui l'ai envoyé, on ignore l'event
     const senderId = msg.sender?._id || msg.sender;
-    if (me && senderId && String(senderId) === String(me._id)) {
-      loadConversations().catch(() => {});
-      return;
-    }
+    if (me && senderId && String(senderId) === String(me._id)) return loadConversations().catch(() => {});
 
     const convId = String(msg.conversationId || msg.conversation || "");
     if (String(currentConversationId) === convId) {
@@ -99,28 +82,30 @@ function initSocket() {
     loadConversations().catch(() => {});
   });
 
-  socket.on("presence", ({ userId, online }) => {
-    console.log("presence", userId, online);
-  });
+  socket.on("presence", ({ userId, online }) => console.log("presence", userId, online));
 }
 
 // --- User ---
 async function fetchUser() {
-  const data = await fetchJSON("/api/users/me", { method: "GET" });
-  me = data; // { _id, fullname, phone, image, connect? }
+  me = await fetchJSON("/api/users/me", { method: "GET" });
+  elName.textContent = me.fullname || "";
+  elImg.src = me.image || "https://i.pravatar.cc/150?u=me";
+}
 
-  elName.textContent = data.fullname || "";
-  elImg.src = data.image || "https://i.pravatar.cc/150?u=me";
+// 🔥 Fetch de tous les utilisateurs dès le départ
+async function fetchAllUsers() {
+  allUsers = await fetchJSON("/api/users/all", { method: "GET" });
+  if (!Array.isArray(allUsers)) allUsers = [];
 }
 
 // --- Profile modal ---
 async function openProfile(user) {
   if (!user?._id) return;
 
-  const full = await fetchJSON(`/api/users/${user._id}`, { method: "GET" });
+  // 🔥 Utiliser les données stockées si elles existent
+  const full = allUsers.find(u => String(u._id) === String(user._id)) || await fetchJSON(`/api/users/${user._id}`, { method: "GET" });
 
-  profileAvatar.src =
-    full.image || `https://i.pravatar.cc/150?u=${encodeURIComponent(full.fullname || "user")}`;
+  profileAvatar.src = full.image || `https://i.pravatar.cc/150?u=${encodeURIComponent(full.fullname || "user")}`;
   profileName.textContent = full.fullname || "";
   profilePhone.textContent = full.phone ? `+261 ${full.phone}` : "";
   profilePhone2.textContent = full.phone ? `+261 ${full.phone}` : "";
@@ -129,30 +114,30 @@ async function openProfile(user) {
   profileModal?.classList.remove("hidden");
 }
 
-function closeProfile() {
-  profileModal?.classList.add("hidden");
-}
-
+function closeProfile() { profileModal?.classList.add("hidden"); }
 profileBackdrop?.addEventListener("click", closeProfile);
 profileClose?.addEventListener("click", closeProfile);
 
-// --- Conversations ---
+// --- Conversation helpers ---
 function getOtherParticipant(conv) {
-  const participants = conv.participants || [];
-  const others = participants.filter((u) => String(u._id) !== String(me?._id));
-  return others[0] || null;
+  if (!conv?.participants) return null;
+  return conv.participants.find(u => String(u._id) !== String(me?._id)) || null;
 }
 
 function renderConversationItem(conv) {
   const other = getOtherParticipant(conv);
-  const otherName = other?.fullname || "Discussion";
-  const otherAvatar =
-    other?.image || `https://i.pravatar.cc/150?u=${encodeURIComponent(otherName)}`;
 
-  const lastText = conv.lastMessage?.text ? conv.lastMessage.text : "";
+  // 🔥 Vérifie d'abord dans allUsers si info manquante
+  if (other && !other.image) {
+    const found = allUsers.find(u => String(u._id) === String(other._id));
+    if (found?.image) other.image = found.image;
+  }
+
+  const otherName = other?.fullname || "Discussion";
+  const otherAvatar = other?.image || other?.file || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+  const lastText = conv.lastMessage?.text || "";
   const time = conv.lastMessage?.createdAt ? formatTime(conv.lastMessage.createdAt) : "";
   const unread = conv.unread || 0;
-
   const activeClass = String(conv._id) === String(currentConversationId) ? "active" : "";
 
   return `
@@ -172,15 +157,11 @@ function renderConversationItem(conv) {
   `;
 }
 
+// 🔥 Load conversations
 async function loadConversations() {
   const conversations = await fetchJSON("/api/chat/conversations", { method: "GET" });
-
   if (!Array.isArray(conversations) || conversations.length === 0) {
-    conversationList.innerHTML = `
-      <div style="padding: 12px; color: #666; font-size: 14px;">
-        Aucune discussion. Clique sur ➕ pour démarrer.
-      </div>
-    `;
+    conversationList.innerHTML = `<div style="padding:12px;color:#666;font-size:14px;">Aucune discussion. Clique sur ➕ pour démarrer.</div>`;
     refreshIcons();
     return;
   }
@@ -188,10 +169,9 @@ async function loadConversations() {
   conversationList.innerHTML = conversations.map(renderConversationItem).join("");
   refreshIcons();
 
-  conversationList.querySelectorAll(".contact-item").forEach((item) => {
+  conversationList.querySelectorAll(".contact-item").forEach(item => {
     item.addEventListener("click", async () => {
-      const convId = item.getAttribute("data-conv-id");
-      await openConversation(convId);
+      await openConversation(item.getAttribute("data-conv-id"));
     });
   });
 }
@@ -202,8 +182,6 @@ function renderMessage(msg) {
   const isMe = me && String(senderId) === String(me._id);
   const rowClass = isMe ? "outgoing" : "incoming";
   const time = msg.createdAt ? formatTime(msg.createdAt) : "";
-
-  // coches uniquement sur outgoing
   const ticks = isMe ? ` <i data-lucide="check-check" class="status-icon"></i>` : "";
 
   return `
@@ -216,17 +194,15 @@ function renderMessage(msg) {
   `;
 }
 
+// 🔥 Open conversation
 async function openConversation(convId) {
   currentConversationId = convId;
 
-  // ✅ rejoindre la room socket de cette conversation
+  // Rejoindre la room socket
   if (socket) socket.emit("joinConversation", convId);
 
   // Charger messages
-  const messages = await fetchJSON(`/api/chat/conversations/${convId}/messages?limit=50`, {
-    method: "GET",
-  });
-
+  const messages = await fetchJSON(`/api/chat/conversations/${convId}/messages?limit=50`, { method: "GET" });
   chatDisplay.innerHTML = Array.isArray(messages) ? messages.map(renderMessage).join("") : "";
   refreshIcons();
   chatDisplay.scrollTop = chatDisplay.scrollHeight;
@@ -234,15 +210,23 @@ async function openConversation(convId) {
   // Marquer comme lu
   await fetchJSON(`/api/chat/conversations/${convId}/read`, { method: "POST" });
 
-  // Mettre header (nom/photo) + clic profil
+  // Charger la conversation pour récupérer l'autre participant
   const convs = await fetchJSON("/api/chat/conversations", { method: "GET" });
-  const conv = Array.isArray(convs) ? convs.find((c) => String(c._id) === String(convId)) : null;
-  const other = conv ? getOtherParticipant(conv) : null;
+  const conv = Array.isArray(convs) ? convs.find(c => String(c._id) === String(convId)) : null;
+  let other = conv ? getOtherParticipant(conv) : null;
 
+  // 🔥 Chercher les infos dans allUsers si image manquante
+  if (other) {
+    const userInfo = allUsers.find(u => String(u._id) === String(other._id));
+    if (userInfo) {
+      other = { ...other, ...userInfo }; // merge pour avoir fullname, image, phone etc.
+    }
+  }
+
+  // Mettre à jour le header current-contact
   currentName.textContent = other?.fullname || "Discussion";
-  currentAvatar.src =
-    other?.image || `https://i.pravatar.cc/150?u=${encodeURIComponent(other?.fullname || "user")}`;
-  currentStatus.textContent = "";
+  currentAvatar.src = other?.image || `https://i.pravatar.cc/150?u=${encodeURIComponent(other?.fullname || "user")}`;
+  currentStatus.textContent = other?.connect ? "En ligne" : "Hors ligne";
 
   if (other && other._id) {
     currentAvatar.style.cursor = "pointer";
@@ -256,15 +240,16 @@ async function openConversation(convId) {
     currentName.onclick = null;
   }
 
+  // Recharger la liste des conversations
   await loadConversations();
 }
 
+// 🔥 Send message
 async function sendMessage() {
   const text = messageInput.value.trim();
   if (!text) return;
   if (!currentConversationId) return alert("Sélectionne une discussion d'abord.");
 
-  // POST -> backend -> renvoie msg (et backend émet socket aux autres)
   const msg = await fetchJSON(`/api/chat/conversations/${currentConversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({ text }),
@@ -274,55 +259,38 @@ async function sendMessage() {
   chatDisplay.insertAdjacentHTML("beforeend", renderMessage(msg));
   refreshIcons();
   chatDisplay.scrollTop = chatDisplay.scrollHeight;
-
   await loadConversations();
 }
 
 sendBtn?.addEventListener("click", sendMessage);
-messageInput?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendMessage();
-});
+messageInput?.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
 
-// --- New chat flow ---
+// 🔥 New chat flow
 async function newChatFlow() {
-  const users = await fetchJSON("/api/users/all", { method: "GET" });
+  if (!allUsers.length) await fetchAllUsers();
+  const users = allUsers.filter(u => String(u._id) !== String(me._id));
 
-  if (!Array.isArray(users) || users.length === 0) {
-    alert("Aucun autre utilisateur trouvé. Crée un 2e compte d'abord.");
-    return;
-  }
+  if (!users.length) return alert("Aucun autre utilisateur trouvé.");
 
   const list = users.map((u, i) => `${i + 1}. ${u.fullname} (${u.phone})`).join("\n");
   const choice = prompt(`Choisis un contact (numéro) :\n\n${list}`);
   const idx = parseInt(choice, 10) - 1;
-
   if (Number.isNaN(idx) || idx < 0 || idx >= users.length) return;
 
   const otherUserId = users[idx]._id;
-
-  const created = await fetchJSON("/api/chat/conversations/direct", {
-    method: "POST",
-    body: JSON.stringify({ otherUserId }),
-  });
-
+  const created = await fetchJSON("/api/chat/conversations/direct", { method: "POST", body: JSON.stringify({ otherUserId }) });
   await loadConversations();
-  if (created?.conversationId) {
-    await openConversation(created.conversationId);
-  }
+  if (created?.conversationId) await openConversation(created.conversationId);
 }
 
 const newChatBtn = document.getElementById("newChatBtn");
-newChatBtn?.addEventListener("click", () => {
-  newChatFlow().catch((err) => {
-    console.error(err);
-    alert(err.message || "Erreur");
-  });
-});
+newChatBtn?.addEventListener("click", () => newChatFlow().catch(err => { console.error(err); alert(err.message || "Erreur"); }));
 
-// ✅ Un seul DOMContentLoaded (tout en bas)
+// ✅ DOMContentLoaded
 window.addEventListener("DOMContentLoaded", async () => {
   try {
     await fetchUser();
+    await fetchAllUsers(); // 🔥 fetch tous les users dès le départ
     initSocket();
     await loadConversations();
     refreshIcons();
