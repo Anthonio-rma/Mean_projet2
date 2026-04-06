@@ -41,11 +41,11 @@ app.use("/upload", express.static(path.join(__dirname, "upload")));
 // =========================
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "mini_threads_secret_key",
+    secret: process.env.SESSION_SECRET || "reseauDb_secret_key",
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mini_threads"
+      mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/reseauDb"
     }),
     cookie: {
       maxAge: 1000 * 60 * 60 * 24,
