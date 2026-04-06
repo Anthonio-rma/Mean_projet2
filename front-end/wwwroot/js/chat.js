@@ -232,7 +232,7 @@ async function openConversation(convId) {
     currentAvatar.style.cursor = "pointer";
     currentName.style.cursor = "pointer";
     currentAvatar.onclick = () => openProfile(other);
-    currentName.onclick = () => openProfile(other);
+    currentName.onclick = () => openProfile(other); 
   } else {
     currentAvatar.style.cursor = "default";
     currentName.style.cursor = "default";
