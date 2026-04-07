@@ -4,7 +4,7 @@ const MongoStore = require("connect-mongo").default;
 const path = require("path");
 const cors = require("cors");
 const http = require("http");
-const connectDB = require("./config/db")
+const connectDB = require("./config/db");
 const { Server } = require("socket.io");
 require("dotenv").config();
 
@@ -12,12 +12,16 @@ const User = require("./models/User");
 
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: true,
     credentials: true
   }
 });
+
+// rendre io accessible dans les routes
+app.set("io", io);
 
 // =========================
 // MIDDLEWARE
@@ -49,11 +53,12 @@ app.use(
     }),
     cookie: {
       maxAge: 1000 * 60 * 60 * 24,
-      httpOnly: true
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false
     }
   })
 );
-
 // =========================
 // DATABASE
 // =========================
@@ -65,7 +70,7 @@ connectDB();
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/posts", require("./routes/postRoutes"));
-app.use("/api/publications", require("./routes/publication"))
+app.use("/api/publications", require("./routes/publication"));
 
 // =========================
 // DEFAULT ROUTE
@@ -77,28 +82,68 @@ app.get("/", (req, res) => {
 // =========================
 // SOCKET LOGIC
 // =========================
-const onlineUsers = new Map();
+const onlineUsers = new Map(); // userId => Set(socketId)
 
 io.on("connection", (socket) => {
   console.log("Socket connecté :", socket.id);
 
+  // utilisateur en ligne
   socket.on("join", async (userId) => {
     try {
-      onlineUsers.set(String(userId), socket.id);
+      if (!userId) return;
+
+      const key = String(userId);
+
+      if (!onlineUsers.has(key)) {
+        onlineUsers.set(key, new Set());
+      }
+
+      onlineUsers.get(key).add(socket.id);
+
+      socket.userId = key;
+
       await User.findByIdAndUpdate(userId, { connect: true });
+
       io.emit("users:online", Array.from(onlineUsers.keys()));
+      io.emit("presence", { userId: key, online: true });
     } catch (err) {
       console.error("SOCKET JOIN ERROR:", err);
     }
   });
 
+  // rejoindre une room de conversation
+  socket.on("joinConversation", (convId) => {
+    try {
+      if (!convId) return;
+      socket.join(`conv:${convId}`);
+      console.log(`Socket ${socket.id} a rejoint conv:${convId}`);
+    } catch (err) {
+      console.error("JOIN CONVERSATION ERROR:", err);
+    }
+  });
+
+  // quitter une room de conversation
+  socket.on("leaveConversation", (convId) => {
+    try {
+      if (!convId) return;
+      socket.leave(`conv:${convId}`);
+      console.log(`Socket ${socket.id} a quitté conv:${convId}`);
+    } catch (err) {
+      console.error("LEAVE CONVERSATION ERROR:", err);
+    }
+  });
+
+  // ancien message privé direct user->user
   socket.on("private message", (data) => {
     try {
-      const { toUserId, message, fromUserId } = data;
-      const targetSocketId = onlineUsers.get(String(toUserId));
+      const { toUserId, message, fromUserId } = data || {};
+      if (!toUserId) return;
 
-      if (targetSocketId) {
-        io.to(targetSocketId).emit("private message", {
+      const targetSockets = onlineUsers.get(String(toUserId));
+      if (!targetSockets || targetSockets.size === 0) return;
+
+      for (const socketId of targetSockets) {
+        io.to(socketId).emit("private message", {
           fromUserId,
           message
         });
@@ -110,18 +155,18 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", async () => {
     try {
-      let disconnectedUserId = null;
+      const disconnectedUserId = socket.userId;
 
-      for (const [userId, socketId] of onlineUsers.entries()) {
-        if (socketId === socket.id) {
-          disconnectedUserId = userId;
-          break;
+      if (disconnectedUserId && onlineUsers.has(disconnectedUserId)) {
+        const userSockets = onlineUsers.get(disconnectedUserId);
+        userSockets.delete(socket.id);
+
+        if (userSockets.size === 0) {
+          onlineUsers.delete(disconnectedUserId);
+          await User.findByIdAndUpdate(disconnectedUserId, { connect: false });
+
+          io.emit("presence", { userId: disconnectedUserId, online: false });
         }
-      }
-
-      if (disconnectedUserId) {
-        onlineUsers.delete(disconnectedUserId);
-        await User.findByIdAndUpdate(disconnectedUserId, { connect: false });
       }
 
       io.emit("users:online", Array.from(onlineUsers.keys()));

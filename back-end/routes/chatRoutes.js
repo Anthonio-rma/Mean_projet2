@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const isAuth = require("../middleware/auth");
 
@@ -12,13 +13,19 @@ router.post("/conversations/direct", isAuth, async (req, res) => {
     const me = req.session.userId;
     const { otherUserId } = req.body;
 
-    if (!otherUserId) return res.status(400).json({ error: "otherUserId requis" });
-    if (otherUserId === me) return res.status(400).json({ error: "Impossible de discuter avec soi-même" });
+    if (!otherUserId) {
+      return res.status(400).json({ error: "otherUserId requis" });
+    }
+
+    if (String(otherUserId) === String(me)) {
+      return res.status(400).json({ error: "Impossible de discuter avec soi-même" });
+    }
 
     const other = await User.findById(otherUserId);
-    if (!other) return res.status(404).json({ error: "Utilisateur introuvable" });
+    if (!other) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
 
-    // Chercher conversation existante (direct = exactement 2 participants)
     let conv = await Conversation.findOne({
       participants: { $all: [me, otherUserId] },
       $expr: { $eq: [{ $size: "$participants" }, 2] }
@@ -29,7 +36,7 @@ router.post("/conversations/direct", isAuth, async (req, res) => {
         participants: [me, otherUserId],
         lastMessageAt: null
       });
-    } 
+    }
 
     res.json({ conversationId: conv._id });
   } catch (e) {
@@ -44,20 +51,20 @@ router.get("/conversations", isAuth, async (req, res) => {
     const me = req.session.userId;
 
     const conversations = await Conversation.find({ participants: me })
-      .populate("participants", "fullname phone file")
+      .populate("participants", "fullname phone file image connect")
       .populate({
         path: "lastMessage",
-        select: "text sender createdAt"
+        select: "text sender createdAt conversation"
       })
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .lean();
 
-    // Calcul des non-lus
     const convIds = conversations.map(c => c._id);
+
     const unreadAgg = await Message.aggregate([
       { $match: { conversation: { $in: convIds } } },
-      { $match: { sender: { $ne: new (require("mongoose")).Types.ObjectId(me) } } },
-      { $match: { readBy: { $ne: new (require("mongoose")).Types.ObjectId(me) } } },
+      { $match: { sender: { $ne: new mongoose.Types.ObjectId(me) } } },
+      { $match: { readBy: { $ne: new mongoose.Types.ObjectId(me) } } },
       { $group: { _id: "$conversation", unread: { $sum: 1 } } }
     ]);
 
@@ -81,24 +88,33 @@ router.get("/conversations/:id/messages", isAuth, async (req, res) => {
     const me = req.session.userId;
     const { id } = req.params;
     const limit = Math.min(parseInt(req.query.limit || "30", 10), 100);
-    const before = req.query.before; 
+    const before = req.query.before;
 
     const conv = await Conversation.findById(id);
-    if (!conv) return res.status(404).json({ error: "Conversation introuvable" });
+    if (!conv) {
+      return res.status(404).json({ error: "Conversation introuvable" });
+    }
+
     if (!conv.participants.map(String).includes(String(me))) {
       return res.status(403).json({ error: "Accès interdit" });
     }
 
     const filter = { conversation: id };
-    if (before) filter.createdAt = { $lt: new Date(before) };
+
+    if (before) {
+      const beforeDate = new Date(before);
+      if (!isNaN(beforeDate.getTime())) {
+        filter.createdAt = { $lt: beforeDate };
+      }
+    }
 
     const messages = await Message.find(filter)
-      .populate("sender", "fullname file")
+      .populate("sender", "fullname file image")
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
 
-    res.json(messages.reverse()); // retour chronologique
+    res.json(messages.reverse());
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erreur serveur" });
@@ -112,10 +128,15 @@ router.post("/conversations/:id/messages", isAuth, async (req, res) => {
     const { id } = req.params;
     const { text } = req.body;
 
-    if (!text || !text.trim()) return res.status(400).json({ error: "Message vide" });
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Message vide" });
+    }
 
     const conv = await Conversation.findById(id);
-    if (!conv) return res.status(404).json({ error: "Conversation introuvable" });
+    if (!conv) {
+      return res.status(404).json({ error: "Conversation introuvable" });
+    }
+
     if (!conv.participants.map(String).includes(String(me))) {
       return res.status(403).json({ error: "Accès interdit" });
     }
@@ -124,7 +145,7 @@ router.post("/conversations/:id/messages", isAuth, async (req, res) => {
       conversation: id,
       sender: me,
       text: text.trim(),
-      readBy: [me] // l’expéditeur l’a déjà “lu”
+      readBy: [me]
     });
 
     await Conversation.findByIdAndUpdate(id, {
@@ -133,16 +154,15 @@ router.post("/conversations/:id/messages", isAuth, async (req, res) => {
     });
 
     const populated = await Message.findById(msg._id)
-  .populate("sender", "fullname file")
-  .lean();
+      .populate("sender", "fullname file image")
+      .lean();
 
-// ✅ Socket.io : envoyer à tous les clients dans la room de cette conversation
-const io = req.app.get("io");
-if (io) {
-  io.to(`conv:${id}`).emit("newMessage", populated);
-}
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`conv:${id}`).emit("newMessage", populated);
+    }
 
-res.json(populated);
+    res.json(populated);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erreur serveur" });
@@ -155,9 +175,24 @@ router.post("/conversations/:id/read", isAuth, async (req, res) => {
     const me = req.session.userId;
     const { id } = req.params;
 
+    const conv = await Conversation.findById(id);
+    if (!conv) {
+      return res.status(404).json({ error: "Conversation introuvable" });
+    }
+
+    if (!conv.participants.map(String).includes(String(me))) {
+      return res.status(403).json({ error: "Accès interdit" });
+    }
+
     await Message.updateMany(
-      { conversation: id, readBy: { $ne: me } },
-      { $addToSet: { readBy: me } }
+      {
+        conversation: id,
+        sender: { $ne: me },
+        readBy: { $ne: me }
+      },
+      {
+        $addToSet: { readBy: me }
+      }
     );
 
     res.json({ ok: true });
