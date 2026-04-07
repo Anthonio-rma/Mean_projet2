@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const publicationSchema = new mongoose.Schema({
+const StorySchema = new mongoose.Schema({
   auteur: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   titre: { type: String, required: true, trim: true },
   contenu: { type: String, required: true },
@@ -10,4 +10,4 @@ const publicationSchema = new mongoose.Schema({
   likes: { type: Number, default: 0 }
 });
 
-module.exports = mongoose.model("Publication", publicationSchema);
+module.exports = mongoose.model("Story", StorySchema);

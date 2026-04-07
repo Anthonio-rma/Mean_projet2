@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Publications</title>
+<title>Story</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 0; background-color: #e5ddd5; }
   header { background-color: #075e54; color: white; padding: 10px; text-align: center; }
@@ -134,7 +134,7 @@ form.addEventListener('submit', async e => {
   e.preventDefault();
   const formData = new FormData(form);
 
-  const res = await fetch('/api/publications', {
+  const res = await fetch('/api/Story', {
     method: 'POST',
     body: formData
   });
@@ -152,7 +152,7 @@ form.addEventListener('submit', async e => {
 
 // Charger toutes les publications
 async function loadPublications() {
-  const res = await fetch('/api/publications');
+  const res = await fetch('/api/Story');
   const pubs = await res.json();
 
   let html = "";
@@ -163,7 +163,7 @@ async function loadPublications() {
     html += `
       <div class="pub-card">
         ${p.image 
-          ? `<img src="${p.image}" alt="publication">`
+          ? `<img src="${p.image}" alt="Story">`
           : `<div class="no-image">
               <h4>${p.titre}</h4>
               <p>${p.contenu.substring(0, 60)}...</p>
@@ -172,7 +172,6 @@ async function loadPublications() {
 
         <div class="overlay">
           <span>👤 ${p.auteur.fullname}</span>
-          <span>💬 ${p.hashtags.length}</span>
         </div>
       </div>
     `;

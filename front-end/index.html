@@ -33,7 +33,7 @@
                 <div class="instructions">
                     <h1>Inscrivez-vous sur Thread</h1>
                     <p>Créez un compte pour discuter avec vos amis et votre famille.</p>
-                    <a href="pages/login.html">se connecter </a>
+                    <a href="pages/login.html" class="btn-pub">se connecter </a>
                 </div>
             </div>
 
@@ -48,7 +48,9 @@
                         </div>
                         <div class="input-group">
                             <label>Pays</label>
-                            <input type="text" placeholder="Entrez votre pays" name="paysname" id="paysname" required>
+                            <select name="paysname" id="paysname" required>
+                                <option value="Madagascar" selected>Madagascar</option>
+                            </select>
                         </div>
 
                         <div class="input-group">
@@ -61,7 +63,8 @@
                             <input type="password" placeholder="Entrez votre mot de passe" name="password" id="password" required autocomplete="new-password">
                         </div>
 
-                        <input type="file" id="avatar" name="file">
+                        <label for="avatar" class="btn-pub">Choisir une image</label>
+                        <input type="file" id="avatar" name="file" hidden> <br>
                         <button class="btn-next" type="submit">S'INSCRIRE</button>
                     </form>
                 </div>

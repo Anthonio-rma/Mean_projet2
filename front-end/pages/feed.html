@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mini Threads</title>
+  <title>Threads</title>
   <link rel="stylesheet" href="../wwwroot/styles/feed.css" />
 </head>
 <body>
@@ -16,7 +16,9 @@
 
       <div class="me-card">
         <div class="me-top">
-          <img id="meImage" src="https://i.pravatar.cc/150?u=me" alt="Profil">
+          <a href="./profil.html">
+            <img id="meImage" src="https://i.pravatar.cc/150?u=me" alt="Profil">
+          </a>
           <div>
             <h3 id="meFullname">Utilisateur</h3>
             <p id="meUsername">@username</p>
@@ -39,6 +41,7 @@
 
       <div class="left-actions">
         <a class="nav-btn" href="/pages/message.html">Messagerie</a>
+        <a class="nav-btn" href="./createStory.html">Story</a>
         <button class="nav-btn danger" id="logoutBtn">Déconnexion</button>
       </div>
     </aside>

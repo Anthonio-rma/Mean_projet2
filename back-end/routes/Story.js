@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const isAuth = require("../middleware/auth");
 
-const Publication = require("../models/Publication");
+const Story = require("../models/Story");
 
 // upload image
 const storage = multer.diskStorage({
@@ -18,7 +18,7 @@ router.post("/", isAuth, upload.single("image"), async (req, res) => {
     const { titre, contenu, hashtags } = req.body;
     if (!titre || !contenu) return res.status(400).json({ error: "Remplir tous les champs" });
 
-    const pub = new Publication({
+    const pub = new Story({
       auteur: req.session.userId,
       titre,
       contenu,
@@ -27,7 +27,7 @@ router.post("/", isAuth, upload.single("image"), async (req, res) => {
     });
 
     await pub.save();
-    res.json({ message: "Publication créée", publication: pub });
+    res.json({ message: "Publication créée", Story: pub });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
@@ -37,7 +37,7 @@ router.post("/", isAuth, upload.single("image"), async (req, res) => {
 // Récupérer toutes les publications
 router.get("/", async (req, res) => {
   try {
-    const pubs = await Publication.find()
+    const pubs = await Story.find()
       .populate("auteur", "fullname file")
       .sort({ datePublication: -1 })
       .lean();
